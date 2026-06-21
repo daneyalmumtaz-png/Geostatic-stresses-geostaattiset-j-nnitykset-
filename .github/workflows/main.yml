@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<!-- Geostatic stresses (geostaattiset jannitykset), OpenGeo Basic.
+     English working language, key Finnish geotechnical terms kept as a short gloss.
+     Three acts: Predict (spark) -> Simulate -> Insight.
+     At-rest only. gamma_w = 10 kN/m3 (per Laskuharjoitus 2).
+     Friction angle may differ above and below the water table, so the effective
+     horizontal stress shows the jump, as in the answer workbook.
+     Default profile reproduces the workbook case 223334:
+       sigma'v(6.3 m) = 55.59, sigma'h = 27.79, tau = 13.90 kPa. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Geostatic stresses (geostaattiset jännitykset)</title>
+<style>
+  :root{
+    --bg:#f5f6f4; --panel:#fff; --ink:#1f2a24; --muted:#5d6b62; --line:#d8ddd6;
+    --accent:#2f6f4f; --fi:#2f6f4f;
+    --total:#c0563b; --pore:#2a7fb8; --eff:#2f6f4f; --hor:#d89020; --shear:#7a5ca8;
+    --flash:#cde8d3;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+       background:var(--bg);color:var(--ink);line-height:1.45}
+  header{padding:16px 22px;border-bottom:1px solid var(--line);background:var(--panel)}
+  h1{font-size:1.2rem;margin:0 0 3px}
+  header p{margin:0;color:var(--muted);font-size:.84rem}
+  .fi{color:var(--fi);font-weight:400;font-size:.92em}
+  .steps{display:flex;gap:8px;padding:12px 22px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .steps button{flex:1;max-width:230px;font:inherit;font-size:.86rem;padding:8px 10px;border:1px solid var(--line);
+    background:#fff;border-radius:8px;cursor:pointer;color:var(--muted);text-align:left}
+  .steps button .n{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;
+    background:#e7ebe6;color:var(--ink);font-weight:700;margin-right:7px;font-size:.8rem}
+  .steps button.active{border-color:var(--accent);color:var(--ink);background:#f3f8f3}
+  .steps button.active .n{background:var(--accent);color:#fff}
+  .steps button:disabled{opacity:.5;cursor:not-allowed}
+  main{max-width:1180px;margin:0 auto;padding:18px}
+  .act{display:none}.act.show{display:block}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:16px}
+  .q{font-size:1.02rem;margin:0 0 12px}
+  .opts{display:flex;flex-direction:column;gap:8px}
+  .opts label{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);
+    border-radius:8px;cursor:pointer;font-size:.98rem}
+  .opts label:hover{border-color:var(--accent)}
+  .opts input{accent-color:var(--accent);width:18px;height:18px}
+  .opts label.chosen{background:#f3f8f3;border-color:var(--accent)}
+  .lead{font-size:.95rem;color:var(--muted);margin:0 0 14px}
+  .fb{font-size:.96rem;font-weight:600;margin:10px 0 0;min-height:1.2em}
+  .navrow{display:flex;justify-content:space-between;margin-top:8px}
+  button.go{font:inherit;font-size:.95rem;padding:10px 18px;border:1px solid var(--accent);background:var(--accent);
+    color:#fff;border-radius:8px;cursor:pointer}
+  button.go:disabled{opacity:.5;cursor:not-allowed}
+  button.ghost{font:inherit;font-size:.95rem;padding:10px 18px;border:1px solid var(--line);background:#fff;
+    color:var(--ink);border-radius:8px;cursor:pointer}
+  .sim{display:flex;flex-wrap:wrap;gap:18px}
+  .controls{flex:1 1 300px;min-width:280px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+  .stage{flex:1.5 1 460px;min-width:340px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+  canvas{width:100%;height:auto;display:block}
+  .grp{margin-bottom:12px;padding-bottom:10px;border-bottom:1px dashed var(--line)}
+  .grp:last-child{border-bottom:none;margin-bottom:0}
+  .grp h3{font-size:.92rem;margin:0 0 8px}
+  .ctl{margin:8px 0}
+  .ctl label{display:block;font-size:.8rem;margin-bottom:2px}
+  .ctl .line{display:flex;align-items:center;gap:8px}
+  input[type=range]{flex:1;accent-color:var(--accent)}
+  input[type=number]{width:72px;font:inherit;font-size:.88rem;padding:3px 6px;border:1px solid var(--line);border-radius:6px}
+  .val{min-width:62px;text-align:right;font-variant-numeric:tabular-nums;font-size:.9rem;font-weight:700}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px}
+  .grid .ctl{margin:0}
+  .hint{font-size:.76rem;color:var(--muted);margin:6px 0 0}
+  .plate{margin-top:14px;background:#f3f8f3;border:1px solid #d4e4d8;border-radius:9px;padding:12px}
+  .legend{display:flex;flex-wrap:wrap;gap:7px 22px;margin-top:12px;font-size:.95rem;line-height:1.3}
+  .legend>span{display:flex;align-items:center;gap:8px}
+  .legend i{width:20px;height:6px;border-radius:2px;display:inline-block;flex:none}
+  .plate h3{margin:0 0 8px;font-size:.92rem}
+  .prow{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0}
+  .prow .k{font-size:.9rem}
+  .prow .v{font-variant-numeric:tabular-nums;font-weight:700;font-size:1.15rem}
+</style>
+</head>
+<body>
+<header>
+  <h1>Geostatic stresses <span class="fi">(geostaattiset jännitykset)</span></h1>
+  <p>How the weight of the ground and the water build up pressure with depth. Basic level.</p>
+</header>
+
+<nav class="steps" aria-label="Steps">
+  <button id="tab0" class="active" onclick="goAct(0)"><span class="n">1</span>Predict</button>
+  <button id="tab1" onclick="goAct(1)" disabled><span class="n">2</span>Simulate</button>
+  <button id="tab2" onclick="goAct(2)" disabled><span class="n">3</span>Insight</button>
+</nav>
+
+<main>
+  <!-- ACT 1: PREDICT -->
+  <section id="act0" class="act show">
+    <p class="lead">Choose an answer to both. The simulation unlocks once you commit a prediction.</p>
+
+    <div class="card">
+      <p class="q">1. You dive to the bottom of a deep swimming pool. Where do your ears feel the most pressure?</p>
+      <div class="opts" data-q="s1">
+        <label><input type="radio" name="s1" value="a"> Just under the surface</label>
+        <label><input type="radio" name="s1" value="b"> At the deep bottom</label>
+        <label><input type="radio" name="s1" value="c"> The same everywhere</label>
+      </div>
+      <p class="fb" id="s1fb"></p>
+    </div>
+
+    <div class="card">
+      <p class="q">2. You pick up a heavy rock that is lying underwater. Compared with lifting it in air, it feels:</p>
+      <div class="opts" data-q="s2">
+        <label><input type="radio" name="s2" value="a"> Heavier</label>
+        <label><input type="radio" name="s2" value="b"> Lighter</label>
+        <label><input type="radio" name="s2" value="c"> Exactly the same</label>
+      </div>
+      <p class="fb" id="s2fb"></p>
+    </div>
+
+    <div class="navrow">
+      <span></span>
+      <button id="startBtn" class="go" disabled onclick="goAct(1)">Start simulation &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ACT 2: SIMULATE -->
+  <section id="act1" class="act">
+    <div class="sim">
+      <div class="controls">
+        <div class="grp">
+          <h3>Groundwater table <span class="fi">(pohjavedenpinta)</span></h3>
+          <div class="ctl"><label for="zw">Depth of water table (m)</label>
+            <div class="line"><input type="range" id="zw" min="0" max="6.3" step="0.1" value="1.3"><span class="val" id="zwV"></span></div></div>
+        </div>
+
+        <div class="grp">
+          <h3>Pressure plate <span class="fi">(painelevy)</span></h3>
+          <div class="ctl"><label for="zp">Plate depth (m)</label>
+            <div class="line"><input type="range" id="zp" min="0" max="6.3" step="0.1" value="4.0"><span class="val" id="zpV"></span></div></div>
+          <div class="ctl"><label for="th">Plate angle from horizontal (°)</label>
+            <div class="line"><input type="range" id="th" min="0" max="90" step="5" value="30"><span class="val" id="thV"></span></div></div>
+        </div>
+
+        <div class="grp">
+          <h3>Layer 1 <span class="fi">(maakerros 1)</span></h3>
+          <div class="grid">
+            <div class="ctl"><label for="t1">Thickness (m)</label><input type="number" id="t1" min="0.5" max="6" step="0.1" value="3.5"></div>
+            <div class="ctl"><label for="g1">γ moist (kN/m³)</label><input type="number" id="g1" min="10" max="22" step="0.1" value="14"></div>
+            <div class="ctl"><label for="gs1">γsat (kN/m³)</label><input type="number" id="gs1" min="12" max="23" step="0.1" value="16"></div>
+            <div class="ctl"><label for="pa1">φ above water (°)</label><input type="number" id="pa1" min="15" max="45" step="1" value="22"></div>
+            <div class="ctl"><label for="pb1">φ below water (°)</label><input type="number" id="pb1" min="15" max="45" step="1" value="24"></div>
+          </div>
+        </div>
+
+        <div class="grp">
+          <h3>Layer 2 <span class="fi">(maakerros 2)</span></h3>
+          <div class="grid">
+            <div class="ctl"><label for="t2">Thickness (m)</label><input type="number" id="t2" min="0.5" max="6" step="0.1" value="2.8"></div>
+            <div class="ctl"><label for="g2">γ moist (kN/m³)</label><input type="number" id="g2" min="10" max="22" step="0.01" value="12.75"></div>
+            <div class="ctl"><label for="gs2">γsat (kN/m³)</label><input type="number" id="gs2" min="12" max="23" step="0.01" value="18.64"></div>
+            <div class="ctl"><label for="p2">φ (°)</label><input type="number" id="p2" min="15" max="45" step="1" value="30"></div>
+          </div>
+        </div>
+
+        <div class="navrow" style="margin-top:10px">
+          <button class="ghost" onclick="resetAll()">Reset</button>
+          <span></span>
+        </div>
+      </div>
+
+      <div class="stage">
+        <canvas id="cv" width="700" height="440"></canvas>
+        <div class="legend">
+          <span><i style="background:#c0563b"></i> &sigma;v total stress <span class="fi">(kokonaisj&auml;nnitys)</span></span>
+          <span><i style="background:#2a7fb8"></i> u pore water pressure <span class="fi">(huokosvedenpaine)</span></span>
+          <span><i style="background:#2f6f4f"></i> &sigma;&prime;v effective vertical <span class="fi">(tehokas pystyj&auml;nnitys)</span></span>
+          <span><i style="background:#d89020"></i> &sigma;&prime;h effective horizontal <span class="fi">(tehokas vaakaj&auml;nnitys)</span></span>
+          <span><i style="background:#7a5ca8"></i> &tau; effective shear <span class="fi">(tehokas leikkausj&auml;nnitys)</span></span>
+        </div>
+        <div class="plate">
+          <h3>Pressure plate reading <span class="fi">(painelevy)</span>, at depth <span id="ppDepth"></span> m, angle <span id="ppAng"></span>°</h3>
+          <div class="prow"><span class="k">Total normal stress σn <span class="fi">(kokonaisnormaalijännitys)</span></span><span class="v" id="ppN"></span></div>
+          <div class="prow"><span class="k">Effective normal stress σ′n <span class="fi">(tehokas normaalijännitys)</span></span><span class="v" id="ppNe"></span></div>
+          <div class="prow"><span class="k">Shear stress τ <span class="fi">(leikkausjännitys)</span></span><span class="v" id="ppT"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="navrow">
+      <button class="ghost" onclick="goAct(0)">&larr; Back</button>
+      <button class="go" onclick="goAct(2)">Insight &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ACT 3: INSIGHT -->
+  <section id="act2" class="act">
+    <p class="lead">Check what you took away.</p>
+    <div class="card">
+      <p class="q">1. You raise the groundwater table higher. At the bottom, the effective stress <span class="fi">(tehokas jännitys)</span>, the grain-to-grain squeeze, will:</p>
+      <div class="opts" data-q="i1">
+        <label><input type="radio" name="i1" value="a"> Increase</label>
+        <label><input type="radio" name="i1" value="b"> Decrease</label>
+        <label><input type="radio" name="i1" value="c"> Stay the same</label>
+      </div>
+      <p class="fb" id="i1fb"></p>
+    </div>
+    <div class="card">
+      <p class="q">2. In layer 1 the friction angle changes at the water line. On the effective horizontal stress line <span class="fi">(tehokas vaakajännitys)</span>, this shows up as:</p>
+      <div class="opts" data-q="i2">
+        <label><input type="radio" name="i2" value="a"> A smooth curve, no change</label>
+        <label><input type="radio" name="i2" value="b"> A sudden jump</label>
+        <label><input type="radio" name="i2" value="c"> The line disappears</label>
+      </div>
+      <p class="fb" id="i2fb"></p>
+    </div>
+    <div class="navrow">
+      <button class="ghost" onclick="goAct(1)">&larr; Back to simulation</button>
+      <span></span>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const GW = 10;  // unit weight of water, kN/m3 (per the exercise)
+
+const D0 = { zw:1.3, zp:4.0, th:30,
+  t1:3.5, g1:14, gs1:16, pa1:22, pb1:24,
+  t2:2.8, g2:12.75, gs2:18.64, p2:30 };
+let st = Object.assign({}, D0);
+const maxDepth = () => st.t1 + st.t2;
+
+function gammaAt(z){ const sat = z > st.zw;
+  if(z <= st.t1) return sat ? st.gs1 : st.g1;
+  return sat ? st.gs2 : st.g2;
+}
+function phiAt(z){
+  if(z <= st.t1) return (z > st.zw) ? st.pb1 : st.pa1;
+  return st.p2;
+}
+function sigmaV(z){
+  const breaks=[st.zw, st.t1].filter(b=>b>0 && b<z).sort((a,b)=>a-b);
+  let s=0, z0=0;
+  for(const z1 of [...breaks, z]){ const mid=(z0+z1)/2; s += gammaAt(mid)*(z1-z0); z0=z1; }
+  return s;
+}
+const poreAt = z => z>st.zw ? GW*(z-st.zw) : 0;
+const K0At = z => 1 - Math.sin(phiAt(z)*Math.PI/180);
+function stresses(z){
+  const sv=sigmaV(z), u=poreAt(z), spv=sv-u;
+  const sph=K0At(z)*spv, tau=(spv-sph)/2;
+  return {sv,u,spv,sph,tau};
+}
+function plate(){
+  const z=st.zp, s=stresses(z), shTot=s.sph+s.u, th=st.th*Math.PI/180;
+  const sn=(s.sv+shTot)/2 + (s.sv-shTot)/2*Math.cos(2*th);
+  const tau=(s.sv-shTot)/2*Math.sin(2*th);
+  return {sn, sne:sn-s.u, tau};
+}
+
+const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
+const layCol=["#cdbb98","#b3a07f"];
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const top=46, H=370, md=maxDepth();
+  const yOf = z => top + z/md*H;
+
+  // ---- profile column ----
+  const px=58, pw=120;
+  // layers
+  ctx.fillStyle=layCol[0]; ctx.fillRect(px, yOf(0), pw, yOf(st.t1)-yOf(0));
+  ctx.fillStyle=layCol[1]; ctx.fillRect(px, yOf(st.t1), pw, yOf(md)-yOf(st.t1));
+  ctx.fillStyle="#8a8a8a"; ctx.fillRect(px, yOf(md), pw, 12);   // bedrock cap
+  // water tint below table
+  ctx.fillStyle="rgba(42,127,184,0.18)"; ctx.fillRect(px, yOf(st.zw), pw, yOf(md)-yOf(st.zw));
+  ctx.strokeStyle="#9aa499"; ctx.strokeRect(px, yOf(0), pw, yOf(md)-yOf(0));
+  // water table line
+  ctx.strokeStyle="#2a7fb8"; ctx.lineWidth=2; ctx.setLineDash([5,3]);
+  ctx.beginPath(); ctx.moveTo(px-6, yOf(st.zw)); ctx.lineTo(px+pw+6, yOf(st.zw)); ctx.stroke();
+  ctx.setLineDash([]); ctx.lineWidth=1;
+  ctx.fillStyle="#2a7fb8"; ctx.font="bold 11px system-ui"; ctx.textAlign="left";
+  ctx.fillText("\u25bd pvp", px+pw+8, yOf(st.zw)-3);
+  // depth ticks
+  ctx.fillStyle="#5d6b62"; ctx.font="12px system-ui"; ctx.textAlign="right";
+  for(let z=0; z<=md+0.01; z+=1){ const y=yOf(z);
+    ctx.strokeStyle="#e3e7e1"; ctx.beginPath(); ctx.moveTo(px-4,y); ctx.lineTo(px,y); ctx.stroke();
+    ctx.fillText(z.toFixed(0)+" m", px-7, y+3); }
+  // layer labels
+  ctx.textAlign="center"; ctx.fillStyle="#3a423b"; ctx.font="bold 12px system-ui";
+  ctx.fillText("Layer 1", px+pw/2, (yOf(0)+yOf(st.t1))/2-4);
+  ctx.font="10px system-ui"; ctx.fillText("(maakerros 1)", px+pw/2, (yOf(0)+yOf(st.t1))/2+10);
+  ctx.font="bold 12px system-ui"; ctx.fillText("Layer 2", px+pw/2, (yOf(st.t1)+yOf(md))/2-4);
+  ctx.font="10px system-ui"; ctx.fillText("(maakerros 2)", px+pw/2, (yOf(st.t1)+yOf(md))/2+10);
+  ctx.fillStyle="#fff"; ctx.font="bold 11px system-ui"; ctx.fillText("kallio (rock)", px+pw/2, yOf(md)+9);
+
+  // pressure plate marker (tilted bar)
+  const pcy=yOf(st.zp), pcx=px+pw/2, r=26, a=st.th*Math.PI/180;
+  ctx.strokeStyle="#c0563b"; ctx.lineWidth=4; ctx.beginPath();
+  ctx.moveTo(pcx-r*Math.cos(a), pcy+r*Math.sin(a));
+  ctx.lineTo(pcx+r*Math.cos(a), pcy-r*Math.sin(a)); ctx.stroke(); ctx.lineWidth=1;
+  ctx.fillStyle="#c0563b"; ctx.beginPath(); ctx.arc(pcx,pcy,3,0,2*Math.PI); ctx.fill();
+
+  // ---- stress vs depth chart ----
+  const cx0=255, cw=420, smax=Math.max(sigmaV(md)*1.05, 60);
+  const xOf = s => cx0 + s/smax*cw;
+  ctx.strokeStyle="#d8ddd6"; ctx.strokeRect(cx0, top, cw, H);
+  ctx.fillStyle="#5d6b62"; ctx.font="11px system-ui";
+  for(let i=0;i<=5;i++){ const sx=cx0+cw*i/5;
+    ctx.strokeStyle="#eef1ee"; ctx.beginPath(); ctx.moveTo(sx,top); ctx.lineTo(sx,top+H); ctx.stroke();
+    ctx.fillStyle="#5d6b62"; ctx.textAlign="center"; ctx.fillText((smax*i/5).toFixed(0), sx, top-6); }
+  ctx.fillStyle="#1f2a24"; ctx.font="bold 12px system-ui"; ctx.textAlign="center";
+  ctx.fillText("Stress (kPa)", cx0+cw/2, top-22);
+  for(let z=0; z<=md+0.01; z+=1){ ctx.strokeStyle="#eef1ee"; const y=yOf(z);
+    ctx.beginPath(); ctx.moveTo(cx0,y); ctx.lineTo(cx0+cw,y); ctx.stroke(); }
+
+  // sample depths, doubling at the breaks so jumps draw vertically
+  const eps=0.002, zs=[];
+  for(let z=0; z<=md+1e-9; z+=0.1) zs.push(+z.toFixed(3));
+  for(const b of [st.zw, st.t1]){ if(b>0 && b<md){ zs.push(b-eps, b+eps); } }
+  zs.push(md); zs.sort((a,b)=>a-b);
+
+  const series=[
+    {key:"sv",  col:"var(--total)", c:"#c0563b"},
+    {key:"u",   col:"var(--pore)",  c:"#2a7fb8"},
+    {key:"spv", col:"var(--eff)",   c:"#2f6f4f"},
+    {key:"sph", col:"var(--hor)",   c:"#d89020"},
+    {key:"tau", col:"var(--shear)", c:"#7a5ca8"},
+  ];
+  for(const s of series){
+    ctx.strokeStyle=s.c; ctx.lineWidth=2.2; ctx.beginPath();
+    let first=true;
+    for(const z of zs){ const val=stresses(z)[s.key]; const X=xOf(val), Y=yOf(z);
+      first?(ctx.moveTo(X,Y),first=false):ctx.lineTo(X,Y); }
+    ctx.stroke();
+  }
+  ctx.lineWidth=1;
+  // plate depth marker on chart
+  ctx.strokeStyle="#c0563b"; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(cx0, yOf(st.zp)); ctx.lineTo(cx0+cw, yOf(st.zp)); ctx.stroke(); ctx.setLineDash([]);
+}
+
+function setNum(id,v){ const el=document.getElementById(id); if(el) el.textContent=v; }
+function render(){
+  draw();
+  setNum("zwV", st.zw.toFixed(1)+" m");
+  setNum("zpV", st.zp.toFixed(1)+" m");
+  setNum("thV", st.th+"°");
+  const p=plate();
+  setNum("ppDepth", st.zp.toFixed(1));
+  setNum("ppAng", st.th);
+  setNum("ppN",  p.sn.toFixed(1)+" kPa");
+  setNum("ppNe", p.sne.toFixed(1)+" kPa");
+  setNum("ppT",  p.tau.toFixed(1)+" kPa");
+}
+
+// wire controls
+function bindR(id,key){ const el=document.getElementById(id); el.addEventListener("input",e=>{ st[key]=parseFloat(e.target.value); render(); }); }
+function bindN(id,key){ const el=document.getElementById(id); el.addEventListener("change",e=>{ const v=parseFloat(e.target.value); if(!isNaN(v)) st[key]=v; render(); }); }
+bindR("zw","zw"); bindR("zp","zp"); bindR("th","th");
+["t1","g1","gs1","pa1","pb1","t2","g2","gs2","p2"].forEach(k=>bindN(k,k));
+function resetAll(){ st=Object.assign({},D0);
+  for(const k in D0){ const el=document.getElementById(k); if(el) el.value=D0[k]; }
+  render();
+}
+
+// ---- spark gating + feedback ----
+function chosen(name){ const el=document.querySelector(`input[name="${name}"]:checked`); return el?el.value:null; }
+function sparkFb(name,correct,ok,no){ const v=chosen(name), el=document.getElementById(name+'fb'); if(!el||!v) return;
+  el.textContent = v===correct?ok:no; el.style.color = v===correct?'#2f6f4f':'#5d6b62'; }
+function fb(name,correct,msg){ const v=chosen(name), el=document.getElementById(name+'fb'); if(!el||!v) return;
+  el.textContent = v===correct?msg:'Have another look.'; el.style.color = v===correct?'#2f6f4f':'#b25'; }
+document.querySelectorAll('.opts').forEach(box=>{
+  box.addEventListener('change',()=>{
+    box.querySelectorAll('label').forEach(l=>l.classList.toggle('chosen', l.querySelector('input').checked));
+    const ready = chosen('s1') && chosen('s2');
+    const b=document.getElementById('startBtn'); if(b) b.disabled=!ready;
+    document.getElementById('tab1').disabled=!ready; document.getElementById('tab2').disabled=!ready;
+    sparkFb('s1','b','Oikein! \ud83c\udf89 Hyv\u00e4\u00e4 ty\u00f6t\u00e4. (Correct, nice work.) Pressure grows with depth, and soil works the same way.',
+                     'Good guess! \ud83d\udd0d Watch how the stress lines grow downward in the simulation.');
+    sparkFb('s2','b','Oikein! \ud83c\udf89 Loistavaa. (Correct, excellent.) The water carries part of the weight, so the grains feel less. That is effective stress.',
+                     'Nice try! \ud83d\udd0d See what the water does to the effective stress in the simulation.');
+    fb('i1','b','Correct. Raising the water table adds pore pressure, so the effective stress drops.');
+    fb('i2','b','Correct. K0 changes with the friction angle, so the horizontal effective stress jumps at the water line.');
+  });
+});
+function goAct(i){
+  if((i===1||i===2) && !(chosen('s1')&&chosen('s2'))) return;
+  for(let k=0;k<3;k++){ document.getElementById('act'+k).classList.toggle('show',k===i);
+    document.getElementById('tab'+k).classList.toggle('active',k===i); }
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+render();
+</script>
+</body>
+</html>
