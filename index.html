@@ -292,7 +292,7 @@ const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
 const layCol=["#cdbb98","#b3a07f"];
 function draw(){
   ctx.clearRect(0,0,cv.width,cv.height);
-  const top=46, H=370, md=maxDepth();
+  const top=54, H=360, md=maxDepth();
   const yOf = z => top + z/md*H;
 
   // ---- profile column ----
@@ -350,16 +350,61 @@ function draw(){
   const rawMax = Math.max(sigmaV(md)*1.05, 40);
   const step = niceStep(rawMax, 4);
   const smax = Math.ceil(rawMax/step)*step;      // round top of scale
+  const minor = step/5;                          // minor grid, 10 kPa when the major step is 50
   const xOf = s => cx0 + s/smax*cw;
-  ctx.strokeStyle="#d8ddd6"; ctx.strokeRect(cx0, top, cw, H);
-  ctx.font="12px system-ui";
-  for(let v=0; v<=smax+1e-9; v+=step){ const sx=xOf(v);
-    ctx.strokeStyle="#eef1ee"; ctx.beginPath(); ctx.moveTo(sx,top); ctx.lineTo(sx,top+H); ctx.stroke();
-    ctx.fillStyle="#5d6b62"; ctx.textAlign="center"; ctx.fillText(String(Math.round(v)), sx, top-6); }
+
+  // plot background, so gridlines read against a clean field
+  ctx.fillStyle="#fcfdfc"; ctx.fillRect(cx0, top, cw, H);
+
+  // minor vertical gridlines
+  ctx.lineWidth=1; ctx.strokeStyle="#f0f3f0";
+  for(let v=0; v<=smax+1e-9; v+=minor){
+    if(Math.abs(v % step) < 1e-9) continue;
+    const sx=xOf(v); ctx.beginPath(); ctx.moveTo(sx,top); ctx.lineTo(sx,top+H); ctx.stroke();
+  }
+  // minor horizontal gridlines, every half metre
+  for(let z=0; z<=md+1e-9; z+=0.5){
+    if(Math.abs(z % 1) < 1e-9) continue;
+    const y=yOf(z); ctx.beginPath(); ctx.moveTo(cx0,y); ctx.lineTo(cx0+cw,y); ctx.stroke();
+  }
+  // major gridlines
+  ctx.strokeStyle="#dde3dd";
+  for(let v=0; v<=smax+1e-9; v+=step){
+    const sx=xOf(v); ctx.beginPath(); ctx.moveTo(sx,top); ctx.lineTo(sx,top+H); ctx.stroke();
+  }
+  for(let z=0; z<=md+1e-9; z+=1){
+    const y=yOf(z); ctx.beginPath(); ctx.moveTo(cx0,y); ctx.lineTo(cx0+cw,y); ctx.stroke();
+  }
+
+  // top axis: ticks and labels
+  ctx.strokeStyle="#9aa499";
+  for(let v=0; v<=smax+1e-9; v+=minor){
+    const sx=xOf(v), isMajor = Math.abs(v % step) < 1e-9;
+    ctx.beginPath(); ctx.moveTo(sx, top); ctx.lineTo(sx, top-(isMajor?7:4)); ctx.stroke();
+  }
+  ctx.font="12px system-ui"; ctx.textAlign="center"; ctx.fillStyle="#3a423b";
+  for(let v=0; v<=smax+1e-9; v+=step){ ctx.fillText(String(Math.round(v)), xOf(v), top-11); }
+  ctx.fillStyle="#1f2a24"; ctx.font="bold 12px system-ui";
+  ctx.fillText("Stress (kPa)", cx0+cw/2, top-27);
+  ctx.strokeStyle="#c3ccc3"; ctx.strokeRect(cx0, top, cw, H);
+
+  // depth axis title, above the profile scale
   ctx.fillStyle="#1f2a24"; ctx.font="bold 12px system-ui"; ctx.textAlign="center";
-  ctx.fillText("Stress (kPa)", cx0+cw/2, top-22);
-  for(let z=0; z<=md+0.01; z+=1){ ctx.strokeStyle="#eef1ee"; const y=yOf(z);
-    ctx.beginPath(); ctx.moveTo(cx0,y); ctx.lineTo(cx0+cw,y); ctx.stroke(); }
+  ctx.fillText("Depth (m)", px+pw/2, top-27);
+
+  // water table and layer boundary carried across from the profile into the chart,
+  // so the student can see why the lines bend where they do
+  const ywt=yOf(st.zw);
+  ctx.strokeStyle="#2a7fb8"; ctx.lineWidth=1.5; ctx.setLineDash([6,4]);
+  ctx.beginPath(); ctx.moveTo(px+pw+6, ywt); ctx.lineTo(cx0+cw, ywt); ctx.stroke();
+  if(st.t1 < md){
+    const ylb=yOf(st.t1);
+    ctx.strokeStyle="#8a7f6a";
+    ctx.beginPath(); ctx.moveTo(px+pw+6, ylb); ctx.lineTo(cx0+cw, ylb); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillStyle="#8a7f6a"; ctx.font="bold 10px system-ui"; ctx.textAlign="left";
+    ctx.fillText("layer boundary", px+pw+10, ylb-4);
+  }
+  ctx.setLineDash([]); ctx.lineWidth=1;
 
   // sample depths, doubling at the breaks so jumps draw vertically
   const eps=0.002, zs=[];
@@ -368,25 +413,36 @@ function draw(){
   zs.push(md); zs.sort((a,b)=>a-b);
 
   const series=[
-    {key:"sv",  col:"var(--total)", c:"#c0563b"},
-    {key:"u",   col:"var(--pore)",  c:"#2a7fb8"},
-    {key:"spv", col:"var(--eff)",   c:"#2f6f4f"},
-    {key:"sph", col:"var(--hor)",   c:"#d89020"},
-    {key:"tau", col:"var(--shear)", c:"#7a5ca8"},
+    {key:"sv",  c:"#c0563b"},
+    {key:"u",   c:"#2a7fb8"},
+    {key:"spv", c:"#2f6f4f"},
+    {key:"sph", c:"#d89020"},
+    {key:"tau", c:"#7a5ca8"},
   ];
   for(const s of series){
-    ctx.strokeStyle=s.c; ctx.lineWidth=2.2; ctx.beginPath();
+    ctx.strokeStyle=s.c; ctx.lineWidth=2.4; ctx.beginPath();
     let first=true;
     for(const z of zs){ const val=stresses(z)[s.key]; const X=xOf(val), Y=yOf(z);
       first?(ctx.moveTo(X,Y),first=false):ctx.lineTo(X,Y); }
     ctx.stroke();
   }
   ctx.lineWidth=1;
-  // sensor depth marker on chart
-  ctx.strokeStyle="#c0563b"; ctx.setLineDash([3,3]);
-  ctx.beginPath(); ctx.moveTo(cx0, yOf(st.zp)); ctx.lineTo(cx0+cw, yOf(st.zp)); ctx.stroke(); ctx.setLineDash([]);
 
-  // friction angle and K0 for each zone, written on the chart
+  // sensor depth line, with a dot on every curve so the panel numbers can be found on the graph
+  const ysen=yOf(st.zp);
+  ctx.strokeStyle="#c0563b"; ctx.lineWidth=1.4; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(px+pw+6, ysen); ctx.lineTo(cx0+cw, ysen); ctx.stroke();
+  ctx.setLineDash([]); ctx.lineWidth=1;
+  ctx.fillStyle="#c0563b"; ctx.font="bold 10px system-ui"; ctx.textAlign="left";
+  ctx.fillText("sensor", px+pw+10, ysen+13);
+  const sAt=stresses(st.zp);
+  for(const s of series){
+    const X=xOf(sAt[s.key]);
+    ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(X, ysen, 4.4, 0, 2*Math.PI); ctx.fill();
+    ctx.fillStyle=s.c;   ctx.beginPath(); ctx.arc(X, ysen, 3.1, 0, 2*Math.PI); ctx.fill();
+  }
+
+  // friction angle and K0 for each zone, in a light box so they stay readable over the lines
   const zones=[];
   if(st.zw < st.t1){
     zones.push({a:0, b:st.zw, phi:st.pa1});
@@ -395,15 +451,18 @@ function draw(){
     zones.push({a:0, b:st.t1, phi:st.pa1});
   }
   zones.push({a:st.t1, b:md, phi:st.p2});
-  ctx.textAlign="right";
   for(const zn of zones){
-    if(zn.b-zn.a < 0.25) continue;                 // too thin to label
+    if(zn.b-zn.a < 0.35) continue;                 // too thin to label
     const ym=(yOf(zn.a)+yOf(zn.b))/2;
     const k0=(1-Math.sin(zn.phi*Math.PI/180));
-    ctx.fillStyle="#3a423b"; ctx.font="bold 12px system-ui";
-    ctx.fillText("\u03c6 = "+zn.phi.toFixed(0)+"\u00b0", cx0+cw-10, ym-3);
+    const bw=88, bh=34, bx=cx0+cw-bw-7, by=ym-bh/2;
+    ctx.fillStyle="rgba(255,255,255,0.9)"; ctx.fillRect(bx,by,bw,bh);
+    ctx.strokeStyle="#dfe5df"; ctx.strokeRect(bx,by,bw,bh);
+    ctx.textAlign="left";
+    ctx.fillStyle="#1f2a24"; ctx.font="bold 12px system-ui";
+    ctx.fillText("\u03c6 = "+zn.phi.toFixed(0)+"\u00b0", bx+8, by+15);
     ctx.fillStyle="#5d6b62"; ctx.font="11px system-ui";
-    ctx.fillText("K\u2080 = "+k0.toFixed(2), cx0+cw-10, ym+11);
+    ctx.fillText("K\u2080 = "+k0.toFixed(2), bx+8, by+28);
   }
   ctx.textAlign="center";
 }
